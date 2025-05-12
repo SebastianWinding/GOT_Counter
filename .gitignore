@@ -9,6 +9,11 @@
 /*.dist/
 /*.app/
 
+node_modules/
+.react-router/
+
+/interface/
+
 __pycache__/
 *.pyc
 *.pyo

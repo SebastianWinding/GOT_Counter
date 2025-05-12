@@ -3,7 +3,7 @@ import sqlite3
 import time
 import requests
 
-DB_PATH = "shows.db"
+DB_PATH = "assets/shows.db"
 API_URL = "https://graphql.anilist.co"
 
 
