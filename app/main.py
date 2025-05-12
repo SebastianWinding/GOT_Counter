@@ -5,6 +5,7 @@ from tkinter import ttk, simpledialog, messagebox
 import re
 import json
 import os
+import sqlite3
 from twitchAPI.twitch import Twitch
 from twitchAPI.oauth import UserAuthenticator
 from twitchAPI.chat import Chat, EventData, ChatMessage
@@ -20,34 +21,50 @@ USER_SCOPE = (
 
 Suggestion_list = []
 Counts_list = []
-user_votes = {}  # Used in 1 vote mode
+user_votes = {}  # Used in vote mode
 stop_updates = False
 listening = False
 TOP_N = 10
 timer_interval = 1
-one_vote_mode = False  # Toggle for 1 vote mode
+mode = "normal"  # Modes: normal, series
+vote_mode_enabled = False
 
+# === Load Show Titles from DB ===
+def load_show_titles():
+    db_path = os.path.join(os.path.dirname(__file__), "shows.db")
+    if not os.path.isfile(db_path):
+        print("❌ Could not find shows.db!")
+        return set()
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    cursor.execute("SELECT title_romaji, title_english, synonyms FROM anime")
+    shows = set()
+    for row in cursor.fetchall():
+        shows.update(s.lower() for s in row[0:2] if s)
+        if row[2]:
+            shows.update(map(str.lower, map(str.strip, row[2].split(','))))
+    conn.close()
+    return shows
+
+SHOW_TITLES = load_show_titles()
+
+# === Credential Loader ===
 def load_or_prompt_credentials():
     config_file = 'config.json'
-
     if os.path.exists(config_file):
         with open(config_file, 'r') as f:
             config = json.load(f)
             return config.get('client_id'), config.get('client_secret')
-
     root = tk.Tk()
     root.withdraw()
     client_id = simpledialog.askstring("Twitch Credentials", "Enter your Twitch Client ID:")
     client_secret = simpledialog.askstring("Twitch Credentials", "Enter your Twitch Client Secret:")
-
     if not client_id or not client_secret:
         messagebox.showerror("Error", "Client ID and Secret are required. Exiting.")
         root.destroy()
         exit()
-
     with open(config_file, 'w') as f:
         json.dump({'client_id': client_id, 'client_secret': client_secret}, f)
-
     root.destroy()
     return client_id, client_secret
 
@@ -59,7 +76,7 @@ async def on_ready(ready_event: EventData):
     print('✅ Bot has joined the channel!')
 
 async def list_message(msg: ChatMessage):
-    global Suggestion_list, Counts_list, user_votes, listening, one_vote_mode
+    global Suggestion_list, Counts_list, user_votes, listening, mode, vote_mode_enabled
     if not listening:
         return
 
@@ -67,27 +84,23 @@ async def list_message(msg: ChatMessage):
     text = re.sub(r'[^a-z0-9\s]', '', msg.text.lower())
     text = re.sub(r'\s+', ' ', text).strip()
 
-    if one_vote_mode:
-        # 1 vote per user per suggestion
+    if vote_mode_enabled:
         if username not in user_votes:
             user_votes[username] = set()
+        if text in user_votes[username]:
+            return
+        user_votes[username].add(text)
 
-        if text not in user_votes[username]:
-            user_votes[username].add(text)
-            if text not in Suggestion_list:
-                Suggestion_list.append(text)
-                Counts_list.append(1)
-            else:
-                idx = Suggestion_list.index(text)
-                Counts_list[idx] += 1
+    if mode == "series":
+        if text not in SHOW_TITLES:
+            return
+
+    if text not in Suggestion_list:
+        Suggestion_list.append(text)
+        Counts_list.append(1)
     else:
-        # Normal counting mode
-        if text not in Suggestion_list:
-            Suggestion_list.append(text)
-            Counts_list.append(1)
-        else:
-            idx = Suggestion_list.index(text)
-            Counts_list[idx] += 1
+        idx = Suggestion_list.index(text)
+        Counts_list[idx] += 1
 
 def sort_suggestions():
     global Suggestion_list, Counts_list
@@ -106,20 +119,12 @@ class SuggestionGUI:
 
         style = ttk.Style()
         style.theme_use("clam")
-        style.configure("Treeview",
-                        background="#333",
-                        foreground="white",
-                        rowheight=25,
-                        fieldbackground="#333",
-                        font=("Arial", 10))
-        style.map("Treeview",
-                  background=[('selected', '#555')])
-        style.configure("Treeview.Heading",
-                        background="#444",
-                        foreground="white",
-                        font=("Arial", 10, "bold"))
+        style.configure("Treeview", background="#333", foreground="white", rowheight=25,
+                        fieldbackground="#333", font=("Arial", 10))
+        style.map("Treeview", background=[('selected', '#555')])
+        style.configure("Treeview.Heading", background="#444", foreground="white", font=("Arial", 10, "bold"))
 
-        self.mode_label = tk.Label(self.root, text="Current Mode: Normal", bg="#222", fg="#aaa", font=("Arial", 10, "italic"))
+        self.mode_label = tk.Label(self.root, text="Current Mode: Normal | Vote: Off", bg="#222", fg="#aaa", font=("Arial", 10, "italic"))
         self.mode_label.pack(pady=(5, 0))
 
         self.table_frame_container = tk.Frame(self.root, bg="#222", height=500, width=600)
@@ -154,16 +159,19 @@ class SuggestionGUI:
 
         tk.Button(button_frame, text="🔄 Reset", command=self.reset, bg="#444", fg="white", width=14).grid(row=0, column=1, padx=5)
 
-        self.vote_mode_btn = tk.Button(button_frame, text="Mode: Normal", command=self.toggle_mode, bg="#555", fg="white", width=16)
-        self.vote_mode_btn.grid(row=0, column=2, padx=5)
+        self.mode_btn = tk.Button(button_frame, text="Mode: Normal", command=self.toggle_mode, bg="#555", fg="white", width=16)
+        self.mode_btn.grid(row=0, column=2, padx=5)
 
-        tk.Label(button_frame, text="⏱ Timer (mm:ss):", bg="#222", fg="white").grid(row=0, column=3, padx=(10, 2))
+        self.vote_btn = tk.Button(button_frame, text="Vote Mode: Off", command=self.toggle_vote_mode, bg="#555", fg="white", width=16)
+        self.vote_btn.grid(row=0, column=3, padx=5)
+
+        tk.Label(button_frame, text="⏱ Timer (mm:ss):", bg="#222", fg="white").grid(row=0, column=4, padx=(10, 2))
         self.timer_entry = tk.Entry(button_frame, width=8, justify="center")
         self.timer_entry.insert(0, "00:30")
-        self.timer_entry.grid(row=0, column=4)
+        self.timer_entry.grid(row=0, column=5)
 
         self.timer_btn = tk.Button(button_frame, text="⏱ Start Timer", command=self.start_timer, bg="#444", fg="white", width=14)
-        self.timer_btn.grid(row=0, column=5, padx=5)
+        self.timer_btn.grid(row=0, column=6, padx=5)
 
         config_frame = tk.Frame(self.root, bg="#222")
         config_frame.pack(pady=5)
@@ -189,11 +197,20 @@ class SuggestionGUI:
         timer_interval = self.interval_var.get()
 
     def toggle_mode(self):
-        global one_vote_mode
-        one_vote_mode = not one_vote_mode
-        mode_text = "1 Vote Mode" if one_vote_mode else "Normal"
-        self.vote_mode_btn.config(text=f"Mode: {mode_text}")
-        self.mode_label.config(text=f"Current Mode: {mode_text}")
+        global mode
+        mode = "series" if mode == "normal" else "normal"
+        self.update_mode_label()
+
+    def toggle_vote_mode(self):
+        global vote_mode_enabled
+        vote_mode_enabled = not vote_mode_enabled
+        self.update_mode_label()
+
+    def update_mode_label(self):
+        label = f"Current Mode: {'Series' if mode == 'series' else 'Normal'} | Vote: {'On' if vote_mode_enabled else 'Off'}"
+        self.mode_label.config(text=label)
+        self.mode_btn.config(text=f"Mode: {'Series' if mode == 'series' else 'Normal'}")
+        self.vote_btn.config(text=f"Vote Mode: {'On' if vote_mode_enabled else 'Off'}")
 
     def update_table(self):
         sort_suggestions()
@@ -233,10 +250,8 @@ class SuggestionGUI:
             self.timer_btn.config(text="⚠ Invalid format")
             self.root.after(2000, lambda: self.timer_btn.config(text="⏱ Start Timer"))
             return
-
         if total_seconds <= 0:
             return
-
         global listening
         listening = True
         self.listen_btn.config(text="⏹ Stop")
@@ -250,7 +265,6 @@ class SuggestionGUI:
                 self.timer_btn.config(state="normal")
                 self.timer_btn.config(text="⏱ Start Timer")
                 return
-
             mins, secs = divmod(secs_left, 60)
             self.timer_btn.config(text=f"⏱ {mins:02}:{secs:02}")
             self.root.after(1000, countdown, secs_left - 1)
@@ -260,35 +274,28 @@ class SuggestionGUI:
 # === Run Bot ===
 async def run_bot():
     twitch = await Twitch(CLIENT_ID, CLIENT_SECRET)
-
     auth = UserAuthenticator(twitch, USER_SCOPE)
     token, refresh_token = await auth.authenticate()
     await twitch.set_user_authentication(token, USER_SCOPE, refresh_token)
-
     chat = await Chat(twitch)
     chat.register_event(ChatEvent.READY, on_ready)
     chat.register_event(ChatEvent.MESSAGE, list_message)
 
-    # Start the chat service in the background
     chat_started = threading.Event()
-
     def start_chat():
         chat_started.set()
         chat.start()
-
     chat_thread = threading.Thread(target=start_chat, daemon=True)
     chat_thread.start()
 
-    # Start GUI in main thread
     root = tk.Tk()
-    _gui = SuggestionGUI(root)
+    gui = SuggestionGUI(root)
     try:
         root.mainloop()
     finally:
         if chat_started.is_set():
-            chat.stop()  # ✅ Fixed: do not await
+            chat.stop()
         await twitch.close()
 
-# === Main Entrypoint ===
 if __name__ == '__main__':
     asyncio.run(run_bot())
