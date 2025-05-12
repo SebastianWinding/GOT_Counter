@@ -1,4 +1,5 @@
 {
     "client_id": "XXXX",
-    "client_secret": "XXXX"
+    "client_secret": "XXXX",
+    "target_channel": "gotgames_tb"
 }
