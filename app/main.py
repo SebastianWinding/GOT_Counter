@@ -37,10 +37,8 @@ def start(client: str | None = None, debug: bool = False):
         thread = threading.Thread(target=run_server, args=(port,), daemon=True)
         thread.start()
         print(f"Serving {serve_path} at http://127.0.0.1:{port}/")
-        window = pywebview.create_window("Local Server", f"http://127.0.0.1:{port}/", js_api=js_api)
-        js_api.window = window
+        pywebview.create_window("Local Server", f"http://127.0.0.1:{port}/", js_api=js_api)
         pywebview.start(debug=debug)
     else:
-        window = pywebview.create_window("Remote URL", client, js_api=js_api)
-        js_api.window = window
+        pywebview.create_window("Remote URL", client, js_api=js_api)
         pywebview.start(debug=debug)

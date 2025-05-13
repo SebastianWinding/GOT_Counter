@@ -51,7 +51,14 @@ export default function App() {
       setReady(true);
     };
     window.addEventListener("pywebviewready", handleReady);
-    return () => window.removeEventListener("pywebviewready", handleReady);
+    const timeout = setTimeout(() => {
+      window.removeEventListener("pywebviewready", handleReady);
+      setReady(true);
+    }, 2000);
+    return () => {
+      window.removeEventListener("pywebviewready", handleReady);
+      clearTimeout(timeout);
+    };
   }, []);
 
   if (!ready) {
