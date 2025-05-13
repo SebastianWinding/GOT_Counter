@@ -22,6 +22,7 @@ package-mode = false
 nuitka = "^2.7.2"
 imageio = "^2.37.0"
 watchdog = "^6.0.0"
+pydantic-to-typescript = "^2.0.0"
 
 
 [tool.poetry.dependencies]

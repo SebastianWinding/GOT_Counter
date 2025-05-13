@@ -1,19 +1,19 @@
 # interface.py
 
-from typing import Optional
-# from pydantic import BaseModel
+from typing import Optional, List
+from pydantic import BaseModel
 from webview import Window
 from tools.interface import expose
 
-# class GreetInputData(BaseModel):
-#     nickname: str
+class GreetInputData(BaseModel):
+    nickname: str
     
-# class GreetInput(BaseModel):
-#     name: str
-#     data: GreetInputData
+class GreetInput(BaseModel):
+    name: Optional[str]
+    data: List[GreetInputData]
 
-# class GreetOutput(BaseModel):
-#     greeting: str
+class GreetOutput(BaseModel):
+    greeting: str
 
 class API:    
     # @expose(GreetInput, GreetOutput)

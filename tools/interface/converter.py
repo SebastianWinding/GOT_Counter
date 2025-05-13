@@ -1,7 +1,9 @@
 import ast
+import os
 import sys
 from pathlib import Path
 from typing import Union
+from pydantic2ts import generate_typescript_defs
 
 # ─────────────────────────────────────────────
 #  Helpers for type parsing
@@ -39,13 +41,14 @@ def py_to_ts(anno: str) -> str:
 def _convert(
     src_path: Union[str, Path],
     out_index: Union[str, Path],
-    out_dts:   Union[str, Path]
+    out_dts:   Union[str, Path],
+    out_models: Union[str, Path],
 ):
     src = Path(src_path).read_text()
     tree = ast.parse(src)
 
     # 1) Collect Pydantic models (BaseModel subclasses)
-    models: dict[str, dict[str,str]] = {}
+    models: dict[str, bool] = {}
     for node in tree.body:
         if not isinstance(node, ast.ClassDef):
             continue
@@ -57,11 +60,7 @@ def _convert(
             continue
 
         # It's a Pydantic model
-        fields: dict[str,str] = {}
-        for stmt in node.body:
-            if isinstance(stmt, ast.AnnAssign) and isinstance(stmt.target, ast.Name):
-                fields[stmt.target.id] = parse_annotation(stmt.annotation)
-        models[node.name] = fields
+        models[node.name] = True
 
     # 2) Collect exposed methods on ANY class
     funcs: list[tuple[str,str,str]] = []
@@ -119,15 +118,13 @@ def _convert(
             funcs.append((m.name, in_typ, out_typ))
 
     # 3) Generate interface/index.ts
-    index_lines: list[str] = []
-    # -- TS interfaces for your models
-    for model_name, fields in models.items():
-        index_lines.append(f"export interface {model_name} {{")
-        for fname, ftype in fields.items():
-            index_lines.append(f"  {fname}: {py_to_ts(ftype)};")
-        index_lines.append("}\n")
+    index_lines: list[str] = ["/* tslint:disable */", "/* eslint-disable */"]
 
     # -- wrapper functions
+    if models:
+        model_list = ", ".join(models.keys())
+        index_lines.append(f"import type {{ {model_list} }} from './models';\n")
+
     for fn_name, in_t, out_t in funcs:
         ts_in  = py_to_ts(in_t)
         ts_out = py_to_ts(out_t)
@@ -138,10 +135,10 @@ def _convert(
     Path(out_index).write_text("\n".join(index_lines))
 
     # 4) Generate interface/interface.d.ts
-    dts_lines: list[str] = []
+    dts_lines: list[str] = ["/* tslint:disable */", "/* eslint-disable */"]
     if models:
         model_list = ", ".join(models.keys())
-        dts_lines.append(f"import {{ {model_list} }} from './index';\n")
+        dts_lines.append(f"import type {{ {model_list} }} from './models';\n")
 
     dts_lines.append("declare global {")
     dts_lines.append("  interface Window {")
@@ -158,14 +155,30 @@ def _convert(
 
     Path(out_dts).write_text("\n".join(dts_lines))
 
+    # 5) Generate interface/models.ts
+    try:
+        generate_typescript_defs(str(src_path).replace(".py", "").replace("/", ".").replace("\\", "."), out_models)
+    except Exception as e:
+        if 'json2ts' not in str(e):
+            raise e
+        else:
+            # exec "pnpm add -g json-schema-to-typescript"
+            print("json2ts not found, installing...")
+            os.system("pnpm add -g json-schema-to-typescript")
+            generate_typescript_defs(str(src_path).replace(".py", "").replace("/", ".").replace("\\", "."), out_models)
+    
+    print("Done!")
+
 
 def convert():
     in_file = Path("app/interface.py")
     out_index = Path("interface/index.ts")
     out_dts = Path("interface/interface.d.ts")
+    out_models = Path("interface/models.ts")
     out_index.parent.mkdir(parents=True, exist_ok=True)
     out_dts.parent.mkdir(parents=True, exist_ok=True)
-    _convert(in_file, out_index, out_dts)
+    out_models.parent.mkdir(parents=True, exist_ok=True)
+    _convert(in_file, out_index, out_dts, out_models)
     
 def convert_live():
     import watchdog.events
