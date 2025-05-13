@@ -187,6 +187,8 @@ def convert_live():
     observer.schedule(event_handler, path=in_file.parent, recursive=False)
     observer.start()
 
+    convert()
+
 
 if __name__ == "__main__":
     if len(sys.argv) != 4:

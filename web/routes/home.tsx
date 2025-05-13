@@ -1,6 +1,5 @@
 import { useEffect } from "react";
 import type { Route } from "./+types/home";
-import { greet } from "@interface/index";
 
 export function meta({}: Route.MetaArgs) {
   return [

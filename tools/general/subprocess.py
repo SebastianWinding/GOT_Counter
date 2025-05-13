@@ -16,7 +16,7 @@ def get_supports_color() -> bool:
 
 def get_env() -> dict:
     env = os.environ.copy()
-    # if get_supports_color():
-    #     # only force if we actually have a color-capable TTY
-    #     env['FORCE_COLOR'] = '1'
+    if get_supports_color():
+        # only force if we actually have a color-capable TTY
+        env['FORCE_COLOR'] = '1'
     return env

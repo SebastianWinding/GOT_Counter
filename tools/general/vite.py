@@ -18,7 +18,9 @@ def wait_for_vite_port(proc, timeout=20):
         except Exception:
             text = line.decode('utf-8', errors='replace')
         print(text, end='')
-        match = re.search(r"localhost:(\d+)", line.decode(errors="ignore"))
+        line_clean = line.decode(errors="replace")
+        line_clean = re.sub(r'\x1b\[[0-9;]*m', '', line_clean)
+        match = re.search(r"localhost:(\d+)", line_clean)
         if match:
             port = int(match.group(1))
             print(f"[manage.py] Detected Vite dev server at http://localhost:{port}")

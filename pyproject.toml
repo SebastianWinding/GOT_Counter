@@ -6,12 +6,13 @@ authors = [
     {name = "Ebrahim Tahernejad",email = "ebrahimtahernejad@gmail.com"}
 ]
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.10,<3.14"
 dependencies = [
     "requests (>=2.32.3,<3.0.0)",
     "twitchapi (>=4.4.0,<5.0.0)",
     "fastapi[standard] (>=0.115.12,<0.116.0)",
-    "pywebview (>=5.4,<6.0)"
+    "pywebview (>=5.4,<6.0)",
+    "pythonnet (>=3.0.5,<4.0.0)"
 ]
 
 [tool.poetry]
@@ -22,6 +23,9 @@ nuitka = "^2.7.2"
 imageio = "^2.37.0"
 watchdog = "^6.0.0"
 
+
+[tool.poetry.dependencies]
+pythonnet = {allow-prereleases = true}
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
 build-backend = "poetry.core.masonry.api"

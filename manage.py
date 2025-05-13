@@ -3,7 +3,7 @@ import argparse
 from tools.general.vite import start_vite
 
 def check_pnpm():
-    if os.system("pnpm --version > /dev/null 2>&1") != 0:
+    if os.system("pnpm --version") != 0:
         print("pnpm could not be found")
         print("Please install node and pnpm")
         print("https://nodejs.org/en/download")
