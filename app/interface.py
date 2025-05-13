@@ -6,7 +6,7 @@ from webview import Window
 from tools.interface import expose
 from typing import Dict, Set, List
 
-class AppConfig(BaseModel):
+class VoteConfig(BaseModel):
     mode: str  # "normal" or "series"
     vote_mode: bool
 
@@ -27,16 +27,16 @@ class EmptyInput(BaseModel):
 
 class API:
     def __init__(self):
-        self.config = AppConfig(mode="normal", vote_mode=False)
+        self.config = VoteConfig(mode="normal", vote_mode=False)
         self.user_votes: Dict[str, Set[str]] = {}  # username -> set of voted show ids
         self.votes: Dict[str, int] = {}  # show id -> count
 
-    @expose(EmptyInput, AppConfig)
-    def get_config(self, _: EmptyInput) -> AppConfig:
+    @expose(EmptyInput, VoteConfig)
+    def get_config(self, _: EmptyInput) -> VoteConfig:
         return self.config
 
-    @expose(AppConfig, AppConfig)
-    def set_config(self, new_config: AppConfig) -> AppConfig:
+    @expose(VoteConfig, VoteConfig)
+    def set_config(self, new_config: VoteConfig) -> VoteConfig:
         self.config = new_config
         return self.config
 
@@ -76,4 +76,3 @@ class API:
                 if sorted_list[j][1] < sorted_list[j + 1][1]:
                     sorted_list[j], sorted_list[j + 1] = sorted_list[j + 1], sorted_list[j]
         return VoteResults(results=[VoteEntry(name=k, count=v) for k, v in sorted_list])
-    
